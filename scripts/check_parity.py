@@ -34,7 +34,7 @@ def main() -> None:
     for prompt in PROMPTS:
         ids = tokenizer(prompt, return_tensors="pt").input_ids
         with torch.no_grad():
-            my_logits = mine(ids)
+            my_logits, _ = mine(ids)
             hf_logits = theirs(ids).logits
         diff = (my_logits - hf_logits).abs().max().item()
         worst = max(worst, diff)

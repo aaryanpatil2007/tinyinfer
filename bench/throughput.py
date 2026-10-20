@@ -21,6 +21,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--new-tokens", type=int, default=128)
     parser.add_argument("--device", default="cpu", help="cpu | mps | cuda")
+    parser.add_argument("--cache", action="store_true", help="use the KV cache (phase 3)")
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--runs", type=int, default=3)
     args = parser.parse_args()
@@ -30,12 +31,12 @@ def main() -> None:
     ids = tokenizer(PROMPT, return_tensors="pt").input_ids.to(args.device)
 
     for _ in range(args.warmup):
-        model.generate(ids, max_new_tokens=8)
+        model.generate(ids, max_new_tokens=8, use_cache=args.cache)
 
     rates = []
     for run in range(args.runs):
         start = time.perf_counter()
-        out = model.generate(ids, max_new_tokens=args.new_tokens)
+        out = model.generate(ids, max_new_tokens=args.new_tokens, use_cache=args.cache)
         if args.device in ("cuda", "mps"):
             torch.cuda.synchronize() if args.device == "cuda" else torch.mps.synchronize()
         elapsed = time.perf_counter() - start
