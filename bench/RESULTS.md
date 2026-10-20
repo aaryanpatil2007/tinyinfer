@@ -5,4 +5,4 @@ One row per optimization — this table is the project.
 
 | Date | Change | Model | Device | New tokens | tok/s | vs. previous |
 |------|--------|-------|--------|-----------:|------:|-------------:|
-|      | naive generation (baseline) | gpt2 (124M) | | 128 | | — |
+| 2026-10-19 | naive generation (baseline) | gpt2 (124M) | cpu | 128 | 43.92 | — |

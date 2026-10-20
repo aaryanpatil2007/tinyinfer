@@ -10,7 +10,11 @@ import torch
 
 from engine.loader import get_tokenizer, load_gpt2
 
-TOLERANCE = 1e-4
+# Comparison runs in float64: an algorithmically identical forward pass agrees
+# to ~1e-13, while float32 kernel rounding noise alone reaches ~2e-4 (HF's
+# Conv1D and our transposed nn.Linear take different BLAS paths). float64
+# separates "correct" from "noise" by eight orders of magnitude.
+TOLERANCE = 1e-8
 
 PROMPTS = [
     "The capital of France is",
@@ -23,8 +27,8 @@ def main() -> None:
     from transformers import GPT2LMHeadModel
 
     tokenizer = get_tokenizer()
-    mine = load_gpt2()
-    theirs = GPT2LMHeadModel.from_pretrained("gpt2").eval()
+    mine = load_gpt2().double()
+    theirs = GPT2LMHeadModel.from_pretrained("gpt2").eval().double()
 
     worst = 0.0
     for prompt in PROMPTS:

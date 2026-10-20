@@ -53,9 +53,25 @@ class CausalSelfAttention(nn.Module):
 
         Write it with explicit ops first — you'll replace step 3-5 with your own
         fused kernel in a later phase, so you need to own every intermediate.
+        
         """
-        raise NotImplementedError
-
+        
+        B, T, n_embd = x.shape
+        Q, K, V = self.c_attn(x).split(self.n_embd, dim=2)
+        dimsize = self.n_embd // self.n_head
+        
+        Q = Q.reshape(B, T, self.n_head, self.n_embd // self.n_head).permute(0, 2, 1, 3)
+        K = K.reshape(B, T, self.n_head, self.n_embd // self.n_head).permute(0, 2, 1, 3)
+        V = V.reshape(B, T, self.n_head, self.n_embd // self.n_head).permute(0, 2, 1, 3)
+        
+        scores = Q @ K.transpose(-2, -1) 
+        scores = scores / (dimsize ** 0.5)     
+        mask = torch.triu(torch.ones((T, T), dtype=torch.bool, device=x.device), 1)
+        scores_masked = scores.masked_fill(mask, float("-inf"))
+        scores_masked = F.softmax(scores_masked, dim=-1) @ V
+        scores_masked = scores_masked.permute(0, 2, 1, 3).reshape(B, T, self.n_embd)
+        
+        return self.c_proj(scores_masked)
 
 class MLP(nn.Module):
     def __init__(self, config: GPT2Config):
@@ -65,7 +81,10 @@ class MLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """TODO: c_fc -> GELU (tanh approximation! GPT-2 predates exact GELU) -> c_proj"""
-        raise NotImplementedError
+        inter = self.c_fc(x)
+        inter = F.gelu(inter, approximate="tanh")
+        result = self.c_proj(inter)
+        return result
 
 
 class Block(nn.Module):
@@ -78,7 +97,9 @@ class Block(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """TODO: pre-norm residual wiring (see module docstring)."""
-        raise NotImplementedError
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
 
 
 class GPT2(nn.Module):
@@ -98,8 +119,20 @@ class GPT2(nn.Module):
         """(B, T) int64 token ids -> (B, T, vocab_size) logits
 
         TODO: embeddings (token + position), blocks, final norm, head.
+        
         """
-        raise NotImplementedError
+        
+        B, T = input_ids.shape
+        tok_emb = self.wte(input_ids)
+        pos = torch.arange(T, device=input_ids.device)
+        pos_emb = self.wpe(pos)
+        x = tok_emb + pos_emb
+        for block in self.h:
+            x = block(x)
+        x = self.ln_f(x)
+        logits = self.lm_head(x)
+        
+        return logits
 
     @torch.no_grad()
     def generate(self, input_ids: torch.Tensor, max_new_tokens: int) -> torch.Tensor:
@@ -107,4 +140,14 @@ class GPT2(nn.Module):
         step, append argmax of the last position's logits. Deliberately wasteful;
         it is the baseline your KV cache (phase 3) gets measured against.
         """
-        raise NotImplementedError
+        for _ in range(max_new_tokens):
+            logits = self(input_ids)
+            
+            next_logits = logits[:, -1, :]
+            
+            next_token = torch.argmax(next_logits, dim=-1, keepdim=True)
+            
+            input_ids = torch.cat([input_ids, next_token], dim=1)
+        
+        return input_ids
+        
