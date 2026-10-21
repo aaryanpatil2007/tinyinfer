@@ -1,19 +1,19 @@
-"""Phase 1 referee: does your forward pass produce the same logits as HuggingFace?
+"""Parity referee: does your forward pass produce the same logits as HuggingFace?
 
-    python -m scripts.check_parity
+    python -m scripts.check_parity                  # gpt2
+    python -m scripts.check_parity --model qwen2
 
-Green means your GPT-2 implementation is numerically correct and you move on to
-generation. Red prints the max absolute difference so you can bisect layer by layer.
+Comparison runs in float64: an algorithmically identical forward pass agrees to
+~1e-13, while float32 kernel rounding noise alone reaches ~1e-4. float64
+separates "correct" from "noise" by several orders of magnitude.
 """
+
+import argparse
 
 import torch
 
-from engine.loader import get_tokenizer, load_gpt2
+from engine.loader import get_tokenizer, load_model, load_reference
 
-# Comparison runs in float64: an algorithmically identical forward pass agrees
-# to ~1e-13, while float32 kernel rounding noise alone reaches ~2e-4 (HF's
-# Conv1D and our transposed nn.Linear take different BLAS paths). float64
-# separates "correct" from "noise" by eight orders of magnitude.
 TOLERANCE = 1e-8
 
 PROMPTS = [
@@ -24,11 +24,14 @@ PROMPTS = [
 
 
 def main() -> None:
-    from transformers import GPT2LMHeadModel
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default="gpt2", choices=("gpt2", "qwen2"))
+    args = parser.parse_args()
 
-    tokenizer = get_tokenizer()
-    mine = load_gpt2().double()
-    theirs = GPT2LMHeadModel.from_pretrained("gpt2").eval().double()
+    tokenizer = get_tokenizer(args.model)
+    mine, _ = load_model(args.model)
+    mine = mine.double()
+    theirs = load_reference(args.model).double()
 
     worst = 0.0
     for prompt in PROMPTS:
@@ -42,10 +45,10 @@ def main() -> None:
         print(f"[{status}] max|Δlogits| = {diff:.2e}  {prompt!r}")
 
     if worst < TOLERANCE:
-        print(f"\nParity achieved (worst {worst:.2e} < {TOLERANCE}). Phase 1 done — go measure tokens/sec.")
+        print(f"\nParity achieved (worst {worst:.2e} < {TOLERANCE}). Go measure tokens/sec.")
     else:
         print(f"\nNot yet (worst {worst:.2e}). Debug tip: compare intermediate activations "
-              "block by block against HF's (model.transformer.h[i] outputs via hooks).")
+              "layer by layer against HF's (hooks on the reference model's layers).")
         raise SystemExit(1)
 
 

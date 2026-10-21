@@ -12,7 +12,7 @@ import time
 
 import torch
 
-from engine.loader import get_tokenizer, load_gpt2
+from engine.loader import load_model
 
 PROMPT = "In a shocking finding, scientists discovered a herd of unicorns living in"
 
@@ -22,12 +22,12 @@ def main() -> None:
     parser.add_argument("--new-tokens", type=int, default=128)
     parser.add_argument("--device", default="cpu", help="cpu | mps | cuda")
     parser.add_argument("--cache", action="store_true", help="use the KV cache (phase 3)")
+    parser.add_argument("--model", default="gpt2", choices=("gpt2", "qwen2"))
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--runs", type=int, default=3)
     args = parser.parse_args()
 
-    tokenizer = get_tokenizer()
-    model = load_gpt2(device=args.device)
+    model, tokenizer = load_model(args.model, device=args.device)
     ids = tokenizer(PROMPT, return_tensors="pt").input_ids.to(args.device)
 
     for _ in range(args.warmup):

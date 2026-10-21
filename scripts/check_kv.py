@@ -8,11 +8,12 @@ both at increasing lengths so you can watch the gap grow — that growth curve i
 your write-up.
 """
 
+import argparse
 import time
 
 import torch
 
-from engine.loader import get_tokenizer, load_gpt2
+from engine.loader import load_model
 
 PROMPT = "The history of computing begins with"
 LENGTHS = (32, 128, 256)
@@ -25,8 +26,11 @@ def timed_generate(model, ids, n, use_cache):
 
 
 def main() -> None:
-    tokenizer = get_tokenizer()
-    model = load_gpt2()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default="gpt2", choices=("gpt2", "qwen2"))
+    args = parser.parse_args()
+
+    model, tokenizer = load_model(args.model)
     ids = tokenizer(PROMPT, return_tensors="pt").input_ids
 
     print(f"{'tokens':>7} {'naive tok/s':>12} {'cached tok/s':>13} {'speedup':>8}  identical?")
