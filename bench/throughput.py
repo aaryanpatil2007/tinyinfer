@@ -23,11 +23,15 @@ def main() -> None:
     parser.add_argument("--device", default="cpu", help="cpu | mps | cuda")
     parser.add_argument("--cache", action="store_true", help="use the KV cache (phase 3)")
     parser.add_argument("--model", default="gpt2", choices=("gpt2", "qwen2"))
+    parser.add_argument("--bits", type=int, choices=(8, 4), help="weight-only quantization (phase 5)")
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--runs", type=int, default=3)
     args = parser.parse_args()
 
     model, tokenizer = load_model(args.model, device=args.device)
+    if args.bits:
+        from engine.quantize import quantize_model
+        model = quantize_model(model, args.bits)
     ids = tokenizer(PROMPT, return_tensors="pt").input_ids.to(args.device)
 
     for _ in range(args.warmup):
